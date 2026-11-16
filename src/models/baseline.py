@@ -3,6 +3,7 @@
 This module implements popularity and rating-based baselines, computing
 aggregated statistics, weighted ranking scores, and batch top-N recommendations.
 """
+from pathlib import Path
 from typing import Iterable, List, Optional, Union
 import pandas as pd
 
@@ -160,22 +161,82 @@ def generate_batch_recommendations(
         Combined DataFrame with 'user_id' as the first column, followed by 'rank'
         and recommendation details.
     """
-    all_recs: List[pd.DataFrame] = []
+    if ranked_movies_df is None or ranked_movies_df.empty:
+        base_cols = ["user_id", "rank"] + ([c for c in ranked_movies_df.columns if c not in ("user_id", "rank")] if ranked_movies_df is not None else ["movie_id", "score"])
+        return pd.DataFrame(columns=base_cols)
+
+    # Ensure candidates are sorted by score descending and deduplicated
+    candidates = ranked_movies_df.drop_duplicates(subset=["movie_id"], keep="first").copy()
+    if "score" in candidates.columns:
+        candidates = candidates.sort_values(by="score", ascending=False)
+    candidates = candidates.reset_index(drop=True)
+
+    cand_movie_ids = candidates["movie_id"].tolist()
+
+    # Pre-build lookup for user ratings if exclusion requested: user_id -> set of rated movie_ids
+    user_rated_map = {}
+    if exclude_rated and ratings_df is not None and not ratings_df.empty and "user_id" in ratings_df.columns:
+        grouped = ratings_df.groupby("user_id")["movie_id"].apply(set)
+        user_rated_map = grouped.to_dict()
+
+    all_user_dfs: List[pd.DataFrame] = []
 
     for uid in user_ids:
-        user_recs = get_user_recommendations(
-            user_id=uid,
-            ranked_movies_df=ranked_movies_df,
-            ratings_df=ratings_df,
-            n=n,
-            exclude_rated=exclude_rated,
-        )
-        if not user_recs.empty:
-            user_recs.insert(0, "user_id", uid)
-            all_recs.append(user_recs)
+        rated_set = user_rated_map.get(uid, set())
+        if not rated_set:
+            selected_indices = list(range(min(n, len(candidates))))
+        else:
+            selected_indices = []
+            for idx, mid in enumerate(cand_movie_ids):
+                if mid not in rated_set:
+                    selected_indices.append(idx)
+                    if len(selected_indices) == n:
+                        break
 
-    if not all_recs:
+        if selected_indices:
+            user_slice = candidates.iloc[selected_indices].copy().reset_index(drop=True)
+            user_slice.insert(0, "rank", range(1, len(user_slice) + 1))
+            user_slice.insert(0, "user_id", uid)
+            all_user_dfs.append(user_slice)
+
+    if not all_user_dfs:
         base_cols = ["user_id", "rank"] + [c for c in ranked_movies_df.columns if c not in ("user_id", "rank")]
         return pd.DataFrame(columns=base_cols)
 
-    return pd.concat(all_recs, ignore_index=True)
+    return pd.concat(all_user_dfs, ignore_index=True)
+
+
+def export_recommendations_to_parquet(
+    recs_df: pd.DataFrame,
+    output_path: Union[str, Path],
+    compression: str = "snappy",
+) -> Path:
+    """Export recommendations DataFrame to Parquet format for downstream consumption.
+
+    Fulfills US2.1 AC5: The output has the correct format for downstream services to consume.
+
+    Args:
+        recs_df: DataFrame containing recommendations (must contain 'user_id', 'rank', 'movie_id').
+        output_path: Destination path for the parquet file.
+        compression: Compression codec to use (default 'snappy').
+
+    Returns:
+        Path to the saved Parquet file.
+
+    Raises:
+        ValueError: If recs_df is None, empty, or missing required columns.
+    """
+    if recs_df is None or recs_df.empty:
+        raise ValueError("Cannot export empty or None recommendations DataFrame")
+
+    required_cols = {"user_id", "rank", "movie_id"}
+    missing = required_cols - set(recs_df.columns)
+    if missing:
+        raise ValueError(f"Recommendations DataFrame missing required columns: {sorted(missing)}")
+
+    dest = Path(output_path)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    recs_df.to_parquet(dest, index=False, engine="pyarrow", compression=compression)
+    return dest
+

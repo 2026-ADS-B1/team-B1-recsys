@@ -11,7 +11,7 @@ from api.schemas import (
     RecommendRequest,
     RecommendResponse,
 )
-from api.service import RecommenderService, UserNotFoundError
+from api.service import RecommenderService, UnknownGenreError, UserNotFoundError
 
 
 def create_app(service: RecommenderService | None = None) -> FastAPI:
@@ -26,7 +26,7 @@ def create_app(service: RecommenderService | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Movie recommender API",
-        version="0.2.0",
+        version="0.3.0",
         description="Ask for movie recommendations for a user, a genre, or both.",
         lifespan=lifespan,
     )
@@ -42,26 +42,49 @@ def create_app(service: RecommenderService | None = None) -> FastAPI:
         responses={
             200: {"content": {"application/json": {"example": EXAMPLE_RESPONSE}}},
             404: {"description": "The user is not in the system"},
-            422: {"description": "The request is not valid"},
+            422: {
+                "description": "The request is not valid (for example, a genre that doesn't exist)"
+            },
+            501: {"description": "Mood is not available yet"},
         },
     )
     def recommend(
         request: Request,
         req: Annotated[RecommendRequest, Body(openapi_examples=REQUEST_EXAMPLES)],
     ) -> RecommendResponse:
-        """Return movies ordered from most to least recommended, without the ones the user already rated."""
+        """Return movies ordered from most to least recommended.
+
+        - **user_id**: a known user gets movies they haven't rated yet. Leave it out for a new user.
+        - **genre**: only movies of that genre (e.g. Comedy, Drama, Action).
+        """
         svc: RecommenderService = request.app.state.service
-        if req.user_id is None:
-            raise HTTPException(status_code=422, detail="user_id is required for now.")
+        if req.mood is not None:
+            raise HTTPException(
+                status_code=501, detail="Mood is not available yet. Use genre instead."
+            )
         try:
-            movies = svc.recommend(user_id=req.user_id, n=req.n)
+            genre = svc.canonical_genre(req.genre) if req.genre else None
+            movies = svc.recommend(user_id=req.user_id, genre=genre, n=req.n)
         except UserNotFoundError:
             raise HTTPException(
                 status_code=404, detail=f"User {req.user_id} is not in the system."
             )
+        except UnknownGenreError:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Genre '{req.genre}' doesn't exist. Valid genres: {', '.join(svc.genres)}.",
+            )
         return RecommendResponse(
-            user_id=req.user_id, genre=None, source=svc.source, recommendations=movies
+            user_id=req.user_id,
+            genre=genre,
+            source=svc.source,
+            recommendations=movies,
         )
+
+    @app.get("/genres")
+    def genres(request: Request) -> dict:
+        """The list of genres you can ask for."""
+        return {"genres": request.app.state.service.genres}
 
     return app
 

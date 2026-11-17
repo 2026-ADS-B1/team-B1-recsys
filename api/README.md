@@ -1,4 +1,4 @@
-# Recommendation API (US6.1, Sprint 1)
+# Recommendation API (US6.1 + US6.2, Sprint 1)
 
 Small FastAPI service: you send a user, a genre or both, and it answers with the top movies
 ordered from most to least recommended. It uses the team's popularity baseline
@@ -25,17 +25,48 @@ To use other files (for example the Parquet files of the pipeline), set:
 | `MOVIES_PATH` | `data/raw/ml-1m/movies.dat` | Movies with title and genres |
 | `MIN_RATINGS` | `50` | Minimum ratings a movie needs to be recommended |
 
-## POST /recommend
+## Endpoints
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/health` | Says if the service is running |
+| GET | `/genres` | Lists the genres you can ask for |
+| POST | `/recommend` | Returns the recommended movies |
+
+### POST /recommend
+
+Every field is optional:
 
 ```json
-{"user_id": 1, "n": 5}
+{"user_id": 1, "genre": "Comedy", "n": 5}
 ```
 
-Returns the `n` best-rated movies the user hasn't rated yet, with title and genres.
-An unknown user returns `404` with a clear message. Genre comes in the next task.
+- `user_id` given: the user must exist; movies they already rated are left out.
+- `user_id` missing: a new user, who gets the best-rated movies.
+- `genre` given: only movies of that genre (upper or lower case both work).
+- `n`: how many movies (1 to 50, default 5).
+- `mood`: reserved for a later sprint; it answers 501 for now.
+
+Answer:
+
+```json
+{
+  "user_id": 1,
+  "genre": "Comedy",
+  "source": "popularity-baseline",
+  "recommendations": [
+    {"rank": 1, "movie_id": 1, "title": "Toy Story (1995)", "genres": ["Animation", "Children's", "Comedy"], "score": 4.12}
+  ]
+}
+```
+
+Errors: `404` user not in the system, `422` genre that doesn't exist (the message lists the valid ones)
+or invalid request, `501` mood.
 
 ## Tests
 
 ```bash
 pytest tests/api
 ```
+
+They use small fake data, so they don't need the real files.

@@ -8,6 +8,7 @@ import os
 
 import pandas as pd
 
+from api.config import load_settings
 from api.data import load_movies, load_ratings
 from api.model_loader import LoadedModel, load_model
 
@@ -69,11 +70,11 @@ class RecommenderService:
 
     @classmethod
     def from_env(cls) -> "RecommenderService":
-        """Build the service from the files given by environment variables (or the defaults)."""
+        """Build the service from the data files and the settings in params.yaml."""
         ratings = load_ratings(os.getenv("RATINGS_PATH", DEFAULT_RATINGS_PATH))
         movies = load_movies(os.getenv("MOVIES_PATH", DEFAULT_MOVIES_PATH))
-        min_ratings = int(os.getenv("MIN_RATINGS", DEFAULT_MIN_RATINGS))
-        return cls(ratings, movies, min_ratings=min_ratings)
+        settings = load_settings()  # params.yaml -> serving.min_ratings
+        return cls(ratings, movies, min_ratings=settings.min_ratings)
 
     def canonical_genre(self, genre: str) -> str:
         """'drama' or ' Drama ' -> 'Drama'. Raises UnknownGenreError if it doesn't exist."""

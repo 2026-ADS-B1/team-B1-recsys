@@ -1,6 +1,6 @@
-# Recommendation API (US6.1, Sprint 1)
+# Recommendation API (US6.1 + US6.2, Sprint 1)
 
-Small FastAPI service: you send a user, a genre or both, and it answers with the top movies
+Small FastAPI service: you send a user, a genre or a mood, and it answers with the top movies
 ordered from most to least recommended. It uses the team's popularity baseline
 (`src/models/baseline.py`, `compute_movie_stats`).
 
@@ -23,7 +23,22 @@ To use other files (for example the Parquet files of the pipeline), set:
 |---|---|---|
 | `RATINGS_PATH` | `data/raw/ml-1m/ratings.dat` | Ratings (`.dat`, `.csv` or `.parquet`) |
 | `MOVIES_PATH` | `data/raw/ml-1m/movies.dat` | Movies with title and genres |
-| `MIN_RATINGS` | `50` | Minimum ratings a movie needs to be recommended |
+
+## Settings (`params.yaml`)
+
+The service reads its settings from the `serving` section of `params.yaml`, at the
+root of the repository. Change them there, not in the code:
+
+```yaml
+serving:
+  min_ratings: 50   # a movie needs at least 50 ratings to be recommended
+```
+
+Only movies with at least `min_ratings` ratings are recommended, to all users, so
+that a movie with a single 5-star rating doesn't top the list. New users (no
+`user_id`) get the best-rated of those movies. For a quick test you can override it
+with an environment variable: `MIN_RATINGS=20 uvicorn api.main:app`.
+Set `PARAMS_PATH` to use another settings file.
 
 ## Which model is used
 
@@ -52,19 +67,68 @@ MODEL_SOURCE=mlflow MLFLOW_TRACKING_URI=http://localhost:5000 uvicorn api.main:a
 
 Model contract for MLflow (to agree with US4.1): a pyfunc model that receives a
 DataFrame with a `movie_id` column and returns one score per row. Only movies with
-at least `MIN_RATINGS` ratings are scored.
+at least `min_ratings` ratings are scored.
 
-## POST /recommend
+## Endpoints
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/health` | Says if the service is running and which model is loaded |
+| GET | `/genres` | Lists the genres you can ask for |
+| GET | `/moods` | Lists the moods you can ask for and their genres |
+| POST | `/recommend` | Returns the recommended movies |
+
+### POST /recommend
+
+Every field is optional:
 
 ```json
-{"user_id": 1, "n": 5}
+{"user_id": 1, "genre": "Comedy", "n": 5}
+{"mood": "relaxed"}
 ```
 
-Returns the `n` best-rated movies the user hasn't rated yet, with title and genres.
-An unknown user returns `404` with a clear message. Genre comes in the next task.
+- `user_id` given: the user must exist; movies they already rated are left out.
+- `user_id` missing: a new user, who gets the best-rated movies.
+- `genre` given: only movies of that genre (upper or lower case both work).
+- `mood` given: only movies that fit that mood (see the list below). Send a genre **or** a mood, not both.
+- `n`: how many movies (1 to 50, default 5).
+
+Answer:
+
+```json
+{
+  "user_id": 1,
+  "genre": "Comedy",
+  "mood": null,
+  "source": "popularity-baseline",
+  "recommendations": [
+    {"rank": 1, "movie_id": 1, "title": "Toy Story (1995)", "genres": ["Animation", "Children's", "Comedy"], "score": 4.12}
+  ]
+}
+```
+
+Errors: `404` user not in the system; `422` genre or mood that doesn't exist (the message
+lists the valid ones), a genre and a mood sent together, or an invalid request.
+
+### Moods
+
+Moods are defined in `params.yaml` (`serving.moods`). A movie fits a mood if it has
+at least one of the mood's genres. To add or change a mood, edit `params.yaml` and
+restart the service (genre names must be written as in `GET /genres`).
+
+| Mood | Genres |
+|---|---|
+| `relaxed` | Comedy, Animation, Children's, Musical |
+| `adventurous` | Action, Adventure, Sci-Fi, Fantasy, Western |
+| `romantic` | Romance |
+| `thrilling` | Thriller, Crime, Mystery, Film-Noir |
+| `scary` | Horror |
+| `thoughtful` | Drama, Documentary, War |
 
 ## Tests
 
 ```bash
 pytest tests/api
 ```
+
+They use small fake data, so they don't need the real files.

@@ -4,3 +4,14 @@ serving:
   # Minimum number of ratings a movie needs to be recommended.
   # Avoids that a movie with a single 5-star rating tops the list (see US1.1).
   min_ratings: 50
+
+  # Moods a user can choose in POST /recommend, and the genres linked to each one.
+  # A movie matches a mood if it has at least one of its genres.
+  # Genre names must be written exactly as in MovieLens (see GET /genres).
+  moods:
+    relaxed: [Comedy, Animation, Children's, Musical]
+    adventurous: [Action, Adventure, Sci-Fi, Fantasy, Western]
+    romantic: [Romance]
+    thrilling: [Thriller, Crime, Mystery, Film-Noir]
+    scary: [Horror]
+    thoughtful: [Drama, Documentary, War]

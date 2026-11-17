@@ -25,6 +25,14 @@ class UnknownGenreError(Exception):
     """The genre does not exist in the catalogue."""
 
 
+class UnknownMoodError(Exception):
+    """The mood is not defined in params.yaml."""
+
+
+class InvalidMoodConfigError(Exception):
+    """A mood in params.yaml uses a genre that is not in the catalogue."""
+
+
 class RecommenderService:
     """Loads the data once and answers recommendation requests quickly."""
 
@@ -34,6 +42,7 @@ class RecommenderService:
         movies_df: pd.DataFrame,
         min_ratings: int = DEFAULT_MIN_RATINGS,
         model: LoadedModel | None = None,
+        moods: dict[str, list[str]] | None = None,
     ):
         # 1. The model in use ranks the movies (score from highest to lowest).
         #    Without a model given, use the one chosen in the environment (baseline by default).
@@ -62,7 +71,21 @@ class RecommenderService:
         self._genre_lookup = {g.lower(): g for g in self._by_genre}
         self.genres = sorted(self._by_genre)
 
-        # 4. For every user, the set of movies they have already rated
+        # 4. Moods from params.yaml: mood name -> genres (checked against the catalogue)
+        self.moods: dict[str, list[str]] = {}
+        for mood, mood_genres in (moods or {}).items():
+            unknown = [
+                g for g in mood_genres if g.strip().lower() not in self._genre_lookup
+            ]
+            if unknown:
+                raise InvalidMoodConfigError(
+                    f"Mood '{mood}' uses genres that are not in the catalogue: {', '.join(unknown)}."
+                )
+            self.moods[mood.strip().lower()] = [
+                self._genre_lookup[g.strip().lower()] for g in mood_genres
+            ]
+
+        # 5. For every user, the set of movies they have already rated
         self._rated: dict[int, frozenset[int]] = {
             int(user): frozenset(movies)
             for user, movies in ratings_df.groupby("user_id")["movie_id"]
@@ -73,8 +96,12 @@ class RecommenderService:
         """Build the service from the data files and the settings in params.yaml."""
         ratings = load_ratings(os.getenv("RATINGS_PATH", DEFAULT_RATINGS_PATH))
         movies = load_movies(os.getenv("MOVIES_PATH", DEFAULT_MOVIES_PATH))
-        settings = load_settings()  # params.yaml -> serving.min_ratings
-        return cls(ratings, movies, min_ratings=settings.min_ratings)
+        settings = (
+            load_settings()
+        )  # params.yaml -> serving.min_ratings and serving.moods
+        return cls(
+            ratings, movies, min_ratings=settings.min_ratings, moods=settings.moods
+        )
 
     def canonical_genre(self, genre: str) -> str:
         """'drama' or ' Drama ' -> 'Drama'. Raises UnknownGenreError if it doesn't exist."""
@@ -83,14 +110,26 @@ class RecommenderService:
             raise UnknownGenreError(genre)
         return canonical
 
+    def canonical_mood(self, mood: str) -> str:
+        """'Relaxed' or ' relaxed ' -> 'relaxed'. Raises UnknownMoodError if it isn't defined."""
+        key = mood.strip().lower()
+        if key not in self.moods:
+            raise UnknownMoodError(mood)
+        return key
+
     def recommend(
-        self, user_id: int | None = None, genre: str | None = None, n: int = 5
+        self,
+        user_id: int | None = None,
+        genre: str | None = None,
+        n: int = 5,
+        mood: str | None = None,
     ) -> list[dict]:
         """Top-n movies, ordered by score.
 
         - user_id given: the user must exist, and the movies they already rated are left out.
         - user_id missing: a new user, who gets the best-rated movies.
         - genre given: only movies of that genre.
+        - mood given: only movies with at least one of the mood's genres.
         """
         if user_id is not None and user_id not in self._rated:
             raise UserNotFoundError(user_id)
@@ -103,6 +142,11 @@ class RecommenderService:
         if genre is not None:
             canonical = self.canonical_genre(genre)
             candidates = (self._items[i] for i in self._by_genre[canonical])
+        elif mood is not None:
+            wanted = set(self.moods[self.canonical_mood(mood)])
+            candidates = (
+                item for item in self._items if wanted.intersection(item["genres"])
+            )
         else:
             candidates = iter(self._items)
 

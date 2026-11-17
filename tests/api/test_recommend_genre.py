@@ -46,12 +46,6 @@ def test_new_user_without_genre_gets_the_best_rated(service):
     assert len(movies) == 5
 
 
-def test_mood_is_not_available_yet(service):
-    with TestClient(create_app(service)) as client:
-        response = client.post("/recommend", json={"mood": "relaxed"})
-    assert response.status_code == 501
-
-
 def test_genres_endpoint_lists_the_genres(service):
     with TestClient(create_app(service)) as client:
         genres = client.get("/genres").json()["genres"]

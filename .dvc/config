@@ -1,0 +1,5 @@
+[core]
+    remote = origin
+['remote "origin"']
+    url = https://dagshub.com/e26-kairi/team-B1-recsys.dvc
+    auth = basic

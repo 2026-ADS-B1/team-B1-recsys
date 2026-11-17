@@ -1,11 +1,15 @@
-"""Recommendation logic used by the API. It reuses the team's popularity baseline (src/models/baseline.py)."""
+"""Recommendation logic used by the API.
+
+The ranked movies come from the model chosen at startup (api/model_loader.py):
+by default the team's popularity baseline (src/models/baseline.py).
+"""
 
 import os
 
 import pandas as pd
-from src.models.baseline import compute_movie_stats
 
 from api.data import load_movies, load_ratings
+from api.model_loader import LoadedModel, load_model
 
 DEFAULT_RATINGS_PATH = "data/raw/ml-1m/ratings.dat"
 DEFAULT_MOVIES_PATH = "data/raw/ml-1m/movies.dat"
@@ -19,18 +23,20 @@ class UserNotFoundError(Exception):
 class RecommenderService:
     """Loads the data once and answers recommendation requests quickly."""
 
-    source = "popularity-baseline"
-
     def __init__(
         self,
         ratings_df: pd.DataFrame,
         movies_df: pd.DataFrame,
         min_ratings: int = DEFAULT_MIN_RATINGS,
+        model: LoadedModel | None = None,
     ):
-        # 1. Rank the movies with the team's baseline (score from highest to lowest)
-        ranked = compute_movie_stats(
-            ratings_df, min_ratings=min_ratings, movies_df=movies_df
-        )
+        # 1. The model in use ranks the movies (score from highest to lowest).
+        #    Without a model given, use the one chosen in the environment (baseline by default).
+        if model is None:
+            model = load_model(ratings_df, movies_df, min_ratings)
+        self.model_info = model.info
+        self.source = model.label
+        ranked = model.ranked_movies
 
         # 2. Keep a light list of the ranked movies, ready to send back
         self._items: list[dict] = [

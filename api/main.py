@@ -32,9 +32,9 @@ def create_app(service: RecommenderService | None = None) -> FastAPI:
     )
 
     @app.get("/health")
-    def health() -> dict:
-        """Quick check that the service is running."""
-        return {"status": "ok"}
+    def health(request: Request) -> dict:
+        """Quick check that the service is running, and which model it has loaded."""
+        return {"status": "ok", "model": request.app.state.service.model_info}
 
     @app.post(
         "/recommend",

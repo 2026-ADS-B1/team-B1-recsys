@@ -23,7 +23,22 @@ To use other files (for example the Parquet files of the pipeline), set:
 |---|---|---|
 | `RATINGS_PATH` | `data/raw/ml-1m/ratings.dat` | Ratings (`.dat`, `.csv` or `.parquet`) |
 | `MOVIES_PATH` | `data/raw/ml-1m/movies.dat` | Movies with title and genres |
-| `MIN_RATINGS` | `50` | Minimum ratings a movie needs to be recommended |
+
+## Settings (`params.yaml`)
+
+The service reads its settings from the `serving` section of `params.yaml`, at the
+root of the repository. Change them there, not in the code:
+
+```yaml
+serving:
+  min_ratings: 50   # a movie needs at least 50 ratings to be recommended
+```
+
+Only movies with at least `min_ratings` ratings are recommended, to all users, so
+that a movie with a single 5-star rating doesn't top the list. New users (no
+`user_id`) get the best-rated of those movies. For a quick test you can override it
+with an environment variable: `MIN_RATINGS=20 uvicorn api.main:app`.
+Set `PARAMS_PATH` to use another settings file.
 
 ## Which model is used
 
@@ -52,7 +67,7 @@ MODEL_SOURCE=mlflow MLFLOW_TRACKING_URI=http://localhost:5000 uvicorn api.main:a
 
 Model contract for MLflow (to agree with US4.1): a pyfunc model that receives a
 DataFrame with a `movie_id` column and returns one score per row. Only movies with
-at least `MIN_RATINGS` ratings are scored.
+at least `min_ratings` ratings are scored.
 
 ## Endpoints
 

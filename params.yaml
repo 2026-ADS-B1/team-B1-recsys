@@ -1,0 +1,6 @@
+# Settings shared by the project. Change them here, not in the code.
+
+serving:
+  # Minimum number of ratings a movie needs to be recommended.
+  # Avoids that a movie with a single 5-star rating tops the list (see US1.1).
+  min_ratings: 50

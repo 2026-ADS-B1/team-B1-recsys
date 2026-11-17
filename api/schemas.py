@@ -17,7 +17,7 @@ class RecommendRequest(BaseModel):
     )
     mood: str | None = Field(
         default=None,
-        description="Reserved for a later sprint (US6.2). Not available yet.",
+        description="Only recommend movies that fit this mood, e.g. 'relaxed' (see GET /moods). Don't send it together with genre.",
     )
     n: int = Field(default=5, ge=1, le=50, description="How many movies to return.")
 
@@ -37,6 +37,7 @@ class RecommendResponse(BaseModel):
 
     user_id: int | None
     genre: str | None
+    mood: str | None = None
     source: str = Field(description="Which model produced the list.")
     recommendations: list[MovieOut]
 
@@ -50,6 +51,10 @@ REQUEST_EXAMPLES = {
     "genre_new_user": {
         "summary": "New user who wants a genre",
         "value": {"genre": "Comedy", "n": 5},
+    },
+    "mood_new_user": {
+        "summary": "New user in a mood",
+        "value": {"mood": "relaxed", "n": 5},
     },
     "known_user_and_genre": {
         "summary": "Known user + genre",

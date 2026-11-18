@@ -87,7 +87,21 @@ def main():
 
     # Section 1: User Profile & Guest Option
     st.subheader("1. User Identification")
-    is_guest = st.checkbox("Continue as guest", value=False, help="Explore recommendations without logging in.")
+
+    if "is_guest" not in st.session_state:
+        st.session_state["is_guest"] = False
+
+    def _sync_guest():
+        st.session_state["is_guest"] = st.session_state.get("guest_checkbox", False)
+
+    is_guest = st.checkbox(
+        "Continue as guest",
+        value=st.session_state["is_guest"],
+        key="guest_checkbox",
+        on_change=_sync_guest,
+        help="Explore recommendations without logging in.",
+    )
+    st.session_state["is_guest"] = is_guest
 
     if is_guest:
         user_id = None
@@ -182,21 +196,38 @@ def main():
                         st.dataframe(df_display, use_container_width=True, hide_index=True)
 
                 elif response.status_code == 404:
-                    detail = response.json().get("detail", f"User {user_id} was not found.")
-                    st.error(f"User not found: {detail}")
-                elif response.status_code == 422:
-                    detail = response.json().get("detail", "Invalid request parameters.")
-                    st.error(f"Validation error: {detail}")
-                else:
-                    st.error(f"Recommendation service error ({response.status_code}): {response.text}")
+                    # Friendly message when user ID is not in the system, offering guest mode (AC4)
+                    st.warning(
+                        f"We couldn't find User ID **{user_id}** in our system. "
+                        "Would you like to continue as a guest to get our top recommendations for tonight?"
+                    )
+                    if st.button("👉 Continue as guest", key="btn_continue_as_guest"):
+                        st.session_state["guest_checkbox"] = True
+                        st.session_state["is_guest"] = True
+                        st.rerun()
 
-            except (httpx.ConnectError, httpx.TimeoutException):
+                elif response.status_code == 422:
+                    st.error("Invalid request parameters. Please verify your selected genre or mood.")
+
+                else:
+                    st.error(f"The recommendation service returned an unexpected error ({response.status_code}). Please try again later.")
+
+            except httpx.TimeoutException:
+                # Friendly message when the service takes too long (AC5)
                 st.error(
-                    f"Could not connect to recommendation service at {service_url}. "
-                    "Please make sure the API service is running (`uvicorn api.main:app`)."
+                    "⏳ The recommendation service is taking too long to respond. "
+                    "Please check your connection or try again in a few moments."
                 )
+
+            except httpx.ConnectError:
+                # Friendly message when the service is down / not available (AC5)
+                st.error(
+                    f"🔌 The recommendation service is currently not available at {service_url}. "
+                    "Please make sure the backend service is running (`uvicorn api.main:app`) and try again."
+                )
+
             except Exception as exc:
-                st.error(f"Unexpected error when calling recommendation service: {exc}")
+                st.error(f"⚠️ Unable to reach the recommendation service right now: {exc}")
 
 
 if __name__ == "__main__":

@@ -9,12 +9,13 @@ Validates:
 - Real HTTP call to POST /recommend with a fake service (mocked httpx):
   - Movies shown in order received, with title and genres.
   - User ID omitted for guests.
-  - Proper error handling for 404 (user not found) and service unavailable.
+  - Friendly message for a user ID not in the system, offering guest mode (AC4).
+  - Friendly message when the service is down / not available (AC5).
+  - Friendly message when the service takes too long / times out (AC5).
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import httpx
-import pytest
 from streamlit.testing.v1 import AppTest
 
 from api.config import load_settings
@@ -42,7 +43,6 @@ def test_no_model_loaded_in_app():
     """Verify that the web application does not load or import recommendation ML models."""
     import app.main
 
-    # Ensure no model classes/loaders are imported into app.main
     forbidden_modules = [
         "src.models.baseline",
         "src.models.batch_recommend",
@@ -180,34 +180,35 @@ def test_guest_recommendation_sends_no_user_id(mock_post):
 
     mock_post.assert_called_once()
     called_json = mock_post.call_args[1]["json"]
-    # user_id must NOT be present in payload
     assert "user_id" not in called_json
     assert called_json.get("genre") == "Comedy"
 
 
 @patch("httpx.post")
-def test_recommendation_handles_404_user_not_found(mock_post):
-    """Verify that a 404 response displays an error message to the user."""
+def test_friendly_message_for_unknown_user_offering_guest(mock_post):
+    """Verify that 404 response displays a friendly message offering to continue as guest (AC4)."""
     mock_post.return_value = httpx.Response(
         404,
-        json={"detail": "User 9999 is not in the system."},
+        json={"detail": "User 99999 is not in the system."},
     )
 
     at = AppTest.from_file("app/main.py")
     at.run()
 
-    at.number_input[0].set_value(9999).run()
+    at.number_input[0].set_value(99999).run()
     at.button[0].click().run()
     assert not at.exception
 
-    # An error message should be displayed
-    assert len(at.error) > 0
-    assert "User 9999 is not in the system" in at.error[0].value
+    # Friendly warning message offering guest mode
+    assert len(at.warning) > 0
+    warning_text = at.warning[0].value
+    assert "99999" in warning_text
+    assert "continue as a guest" in warning_text.lower()
 
 
 @patch("httpx.post")
-def test_recommendation_handles_service_unreachable(mock_post):
-    """Verify that connection failure gracefully displays a service unreachable error."""
+def test_friendly_message_when_service_down(mock_post):
+    """Verify that connection failure displays a friendly message indicating service is unavailable (AC5)."""
     mock_post.side_effect = httpx.ConnectError("Connection refused")
 
     at = AppTest.from_file("app/main.py")
@@ -217,4 +218,23 @@ def test_recommendation_handles_service_unreachable(mock_post):
     assert not at.exception
 
     assert len(at.error) > 0
-    assert "Could not connect to recommendation service" in at.error[0].value
+    error_text = at.error[0].value
+    assert "service is currently not available" in error_text
+    assert "uvicorn api.main:app" in error_text
+
+
+@patch("httpx.post")
+def test_friendly_message_when_service_takes_too_long(mock_post):
+    """Verify that timeout displays a friendly message indicating service is taking too long (AC5)."""
+    mock_post.side_effect = httpx.TimeoutException("Request timed out")
+
+    at = AppTest.from_file("app/main.py")
+    at.run()
+
+    at.button[0].click().run()
+    assert not at.exception
+
+    assert len(at.error) > 0
+    error_text = at.error[0].value
+    assert "taking too long to respond" in error_text
+    assert "try again in a few moments" in error_text

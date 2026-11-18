@@ -15,3 +15,8 @@ serving:
     thrilling: [Thriller, Crime, Mystery, Film-Noir]
     scary: [Horror]
     thoughtful: [Drama, Documentary, War]
+
+app:
+  # Address of the recommendation service (POST /recommend).
+  # Can be overridden with the SERVICE_URL environment variable.
+  service_url: "http://127.0.0.1:8000"

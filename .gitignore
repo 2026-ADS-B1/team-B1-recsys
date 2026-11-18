@@ -218,7 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-
-# Data files (raw / processed)
 data/
-
+__pycache__/
+.pytest_cache/
+.venv/

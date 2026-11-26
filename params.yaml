@@ -21,13 +21,25 @@ app:
   # Can be overridden with the SERVICE_URL environment variable.
   service_url: "http://127.0.0.1:8000"
 
+tracking:
+  # Shared MLflow server of the team on DagsHub (US3.2). Every training is logged here.
+  uri: "https://dagshub.com/e26-kairi/team-B1-recsys.mlflow"
+  experiment: "recommender"
+
 models:
   # Split settings for training and fair evaluation (US2.2 AC4 & AC6)
   split:
-    test_size: 0.2
+    val_size: 0.1
+    test_size: 0.1
     random_state: 42
     stratified_by_user: true
     min_user_ratings: 5
+    temporal: true
+
+  # Evaluation settings for ranking and rating benchmarks (US2.2 AC4 & AC5)
+  evaluation:
+    k: 10
+    threshold: 4.0
 
   # Baseline reference models configuration (US2.2 AC1 & AC6)
   baselines:
@@ -39,6 +51,8 @@ models:
     n_factors: 20
     learning_rate: 0.005
     reg: 0.02
-    epochs: 15
+    epochs: 40
     random_state: 42
+    early_stopping: true
+    patience: 5
 

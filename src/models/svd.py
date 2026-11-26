@@ -4,6 +4,7 @@ Fulfills the US 2.2 Acceptance Criteria:
 - AC2: A more advanced model is trained. Given training data, an advanced model
        (matrix factorization / collaborative filtering) produces recommendations for every user.
 - AC6: Hyperparameters loaded from configuration file (params.yaml).
+- Overfitting Prevention: Validation monitoring and Early Stopping support.
 """
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Union
@@ -31,12 +32,16 @@ class MatrixFactorizationSVDModel(BaseRecommenderModel):
         reg: float = 0.02,
         epochs: int = 15,
         random_state: int = 42,
+        early_stopping: bool = True,
+        patience: int = 3,
     ) -> None:
         self.n_factors = int(n_factors)
         self.learning_rate = float(learning_rate)
         self.reg = float(reg)
         self.epochs = int(epochs)
         self.random_state = int(random_state)
+        self.early_stopping = bool(early_stopping)
+        self.patience = int(patience)
 
         # Fitted attributes
         self.global_mean: float = 3.0
@@ -52,6 +57,8 @@ class MatrixFactorizationSVDModel(BaseRecommenderModel):
         self.movie_factors: Optional[np.ndarray] = None
 
         self.training_history: List[float] = []
+        self.validation_history: List[float] = []
+        self.best_epoch: int = 0
 
     @classmethod
     def from_config(cls, params_path: Union[str, Path] = "params.yaml") -> "MatrixFactorizationSVDModel":
@@ -63,6 +70,8 @@ class MatrixFactorizationSVDModel(BaseRecommenderModel):
             "reg": 0.02,
             "epochs": 15,
             "random_state": 42,
+            "early_stopping": True,
+            "patience": 3,
         }
         if path.exists():
             with open(path, "r", encoding="utf-8") as f:
@@ -71,8 +80,16 @@ class MatrixFactorizationSVDModel(BaseRecommenderModel):
             params.update({k: v for k, v in svd_cfg.items() if k in params})
         return cls(**params)
 
-    def fit(self, train_df: pd.DataFrame) -> "MatrixFactorizationSVDModel":
-        """Fit latent factor vectors and biases on interaction data via SGD."""
+    def fit(
+        self,
+        train_df: pd.DataFrame,
+        val_df: Optional[pd.DataFrame] = None,
+    ) -> "MatrixFactorizationSVDModel":
+        """Fit latent factor vectors and biases on interaction data via SGD.
+
+        Optionally monitors validation error per epoch and triggers early stopping
+        to prevent overfitting.
+        """
         if train_df is None or train_df.empty:
             raise ValueError("train_df cannot be empty or None")
 
@@ -124,8 +141,19 @@ class MatrixFactorizationSVDModel(BaseRecommenderModel):
         bi = self.movie_biases
 
         self.training_history = []
+        self.validation_history = []
 
-        for _ in range(self.epochs):
+        best_val_rmse = float("inf")
+        best_epoch = 0
+        best_bu = bu.copy()
+        best_bi = bi.copy()
+        best_P = P.copy()
+        best_Q = Q.copy()
+        patience_counter = 0
+
+        has_validation = val_df is not None and not val_df.empty
+
+        for epoch in range(1, self.epochs + 1):
             rng.shuffle(indices)
             total_sq_error = 0.0
 
@@ -147,8 +175,37 @@ class MatrixFactorizationSVDModel(BaseRecommenderModel):
                 P[u] += lr * (err * Q[i] - reg * P[u])
                 Q[i] += lr * (err * p_u_old - reg * Q[i])
 
-            rmse_epoch = np.sqrt(total_sq_error / n_samples)
-            self.training_history.append(float(rmse_epoch))
+            train_rmse = float(np.sqrt(total_sq_error / n_samples))
+            self.training_history.append(train_rmse)
+
+            # Evaluate validation error if validation set is provided
+            if has_validation:
+                val_preds = self.predict_batch(val_df)
+                val_rmse = float(np.sqrt(np.mean((val_df["rating"].to_numpy() - val_preds) ** 2)))
+                self.validation_history.append(val_rmse)
+
+                if val_rmse < best_val_rmse:
+                    best_val_rmse = val_rmse
+                    best_epoch = epoch
+                    best_bu = bu.copy()
+                    best_bi = bi.copy()
+                    best_P = P.copy()
+                    best_Q = Q.copy()
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
+                    if self.early_stopping and patience_counter >= self.patience:
+                        break
+
+        # Restore optimal weights from early stopping
+        if has_validation and self.early_stopping and best_epoch > 0:
+            self.best_epoch = best_epoch
+            self.user_biases = best_bu
+            self.movie_biases = best_bi
+            self.user_factors = best_P
+            self.movie_factors = best_Q
+        else:
+            self.best_epoch = len(self.training_history)
 
         return self
 

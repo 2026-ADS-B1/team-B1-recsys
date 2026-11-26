@@ -14,12 +14,15 @@ Validates:
   - Friendly message when the service takes too long / times out (AC5).
 """
 
+from pathlib import Path
 from unittest.mock import patch
 import httpx
 from streamlit.testing.v1 import AppTest
 
 from api.config import load_settings
 from app.config import get_service_url
+
+APP_MAIN_PATH = str(Path(__file__).resolve().parents[2] / "app" / "main.py")
 
 
 def test_service_address_read_from_configuration(tmp_path, monkeypatch):
@@ -55,7 +58,7 @@ def test_no_model_loaded_in_app():
 
 def test_page_loads_without_errors():
     """Verify that the recommendations page loads cleanly with no exceptions."""
-    at = AppTest.from_file("app/main.py")
+    at = AppTest.from_file(APP_MAIN_PATH)
     at.run()
     assert not at.exception
 
@@ -65,7 +68,7 @@ def test_moods_read_from_configuration():
     settings = load_settings()
     expected_moods = sorted(list(settings.moods.keys()))
 
-    at = AppTest.from_file("app/main.py")
+    at = AppTest.from_file(APP_MAIN_PATH)
     at.run()
 
     at.radio[0].set_value("By Mood").run()
@@ -77,7 +80,7 @@ def test_moods_read_from_configuration():
 
 def test_guest_mode_toggle():
     """Verify that toggling the 'Continue as guest' checkbox works cleanly."""
-    at = AppTest.from_file("app/main.py")
+    at = AppTest.from_file(APP_MAIN_PATH)
     at.run()
 
     assert not at.checkbox[0].value
@@ -90,7 +93,7 @@ def test_guest_mode_toggle():
 
 def test_genre_or_mood_selector_mutual_exclusion():
     """Verify only one selector (genre OR mood) is active at a time."""
-    at = AppTest.from_file("app/main.py")
+    at = AppTest.from_file(APP_MAIN_PATH)
     at.run()
 
     # 1. No filter selected initially -> no selectbox present
@@ -127,7 +130,7 @@ def test_successful_recommendation_shows_movies_in_order(mock_post):
         },
     )
 
-    at = AppTest.from_file("app/main.py")
+    at = AppTest.from_file(APP_MAIN_PATH)
     at.run()
 
     # Click Get Recommendations
@@ -165,7 +168,7 @@ def test_guest_recommendation_sends_no_user_id(mock_post):
         },
     )
 
-    at = AppTest.from_file("app/main.py")
+    at = AppTest.from_file(APP_MAIN_PATH)
     at.run()
 
     # Select Guest mode
@@ -192,7 +195,7 @@ def test_friendly_message_for_unknown_user_offering_guest(mock_post):
         json={"detail": "User 99999 is not in the system."},
     )
 
-    at = AppTest.from_file("app/main.py")
+    at = AppTest.from_file(APP_MAIN_PATH)
     at.run()
 
     at.number_input[0].set_value(99999).run()
@@ -211,7 +214,7 @@ def test_friendly_message_when_service_down(mock_post):
     """Verify that connection failure displays a friendly message indicating service is unavailable (AC5)."""
     mock_post.side_effect = httpx.ConnectError("Connection refused")
 
-    at = AppTest.from_file("app/main.py")
+    at = AppTest.from_file(APP_MAIN_PATH)
     at.run()
 
     at.button[0].click().run()
@@ -228,7 +231,7 @@ def test_friendly_message_when_service_takes_too_long(mock_post):
     """Verify that timeout displays a friendly message indicating service is taking too long (AC5)."""
     mock_post.side_effect = httpx.TimeoutException("Request timed out")
 
-    at = AppTest.from_file("app/main.py")
+    at = AppTest.from_file(APP_MAIN_PATH)
     at.run()
 
     at.button[0].click().run()

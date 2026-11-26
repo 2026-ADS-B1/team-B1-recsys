@@ -27,7 +27,8 @@ def test_svd_init_and_config():
     assert model.n_factors == 20
     assert model.learning_rate == pytest.approx(0.005)
     assert model.reg == pytest.approx(0.02)
-    assert model.epochs == 15
+    assert model.epochs == 40
+    assert model.patience == 5
     assert model.random_state == 42
 
 
@@ -173,3 +174,23 @@ def test_svd_validation_errors(sample_ratings_df):
     # Missing columns
     with pytest.raises(ValueError, match="missing required columns"):
         model.fit(pd.DataFrame({"user_id": [1], "movie_id": [101]}))
+
+
+def test_svd_early_stopping_and_validation(sample_ratings_df):
+    """Verify SVD tracks validation history and restores best weights with early stopping."""
+    train_part = sample_ratings_df.iloc[:15]
+    val_part = sample_ratings_df.iloc[15:]
+
+    model = MatrixFactorizationSVDModel(
+        n_factors=5,
+        epochs=30,
+        early_stopping=True,
+        patience=2,
+        random_state=42,
+    )
+    model.fit(train_part, val_df=val_part)
+
+    # Must have both train and val history
+    assert len(model.training_history) > 0
+    assert len(model.validation_history) == len(model.training_history)
+    assert 1 <= model.best_epoch <= len(model.training_history)

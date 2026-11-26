@@ -115,3 +115,63 @@ def test_load_split_params():
     assert "random_state" in cfg
     assert isinstance(cfg["test_size"], float)
     assert isinstance(cfg["random_state"], int)
+
+
+def test_train_test_split_temporal_ordering():
+    """Verify temporal split places chronologically latest ratings into test."""
+    # User 1 has 5 ratings with timestamps 100, 200, 300, 400, 500
+    df = pd.DataFrame({
+        "user_id": [1, 1, 1, 1, 1],
+        "movie_id": [10, 20, 30, 40, 50],
+        "rating": [5, 4, 3, 4, 5],
+        "timestamp": [100, 200, 300, 400, 500],
+    })
+
+    train, test = train_test_split_ratings(
+        df,
+        test_size=0.2,
+        stratified_by_user=True,
+        min_user_ratings=5,
+        temporal=True,
+    )
+
+    # Test size is 1 item (20% of 5). It must be the latest timestamp (500, movie 50)
+    assert len(test) == 1
+    assert test.iloc[0]["movie_id"] == 50
+    assert test.iloc[0]["timestamp"] == 500
+
+    # Train timestamps must all be less than test timestamp
+    assert train["timestamp"].max() < test["timestamp"].min()
+
+
+def test_train_val_test_split_proportions_and_temporal():
+    """Verify 3-way split divides data correctly across Train, Validation and Test sets."""
+    from src.models.split import train_val_test_split_ratings
+
+    # Create 10 ratings for user 1 with timestamps 10..100
+    df = pd.DataFrame({
+        "user_id": [1] * 10,
+        "movie_id": list(range(1, 11)),
+        "rating": [4.0] * 10,
+        "timestamp": [i * 10 for i in range(1, 11)],
+    })
+
+    train, val, test = train_val_test_split_ratings(
+        df,
+        val_size=0.1,
+        test_size=0.1,
+        stratified_by_user=True,
+        min_user_ratings=5,
+        temporal=True,
+    )
+
+    # 10% of 10 is 1 item in test, 1 item in val, 8 in train
+    assert len(test) == 1
+    assert len(val) == 1
+    assert len(train) == 8
+
+    # Temporal order: train < val < test
+    assert train["timestamp"].max() < val["timestamp"].min()
+    assert val["timestamp"].max() < test["timestamp"].min()
+    assert test.iloc[0]["timestamp"] == 100
+    assert val.iloc[0]["timestamp"] == 90

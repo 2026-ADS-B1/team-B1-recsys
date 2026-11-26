@@ -111,5 +111,8 @@
     "svd_beats_baseline_mae": true,
     "rmse_improvement_percent": 12.59
   },
-  "tracking_runs": {}
+  "tracking_runs": {
+    "baseline_run_id": "673ccc5a26a34ed3a16ba377ed975b84",
+    "svd_run_id": "b25c0f6515714f48946ba833b65ae142"
+  }
 }

@@ -83,6 +83,7 @@ python -m venv .venv
 # Install dependencies
 pip install -r api/requirements.txt
 pip install -r app/requirements.txt
+pip install -r src/tracking/requirements.txt   # MLflow, to log trainings (see Experiment Tracking)
 ```
 
 ### 2. Download the Dataset
@@ -130,6 +131,10 @@ serving:
     scary: [Horror]
     thoughtful: [Drama, Documentary, War]
 
+tracking:                                # Shared MLflow server (see Experiment Tracking)
+  uri: "https://dagshub.com/e26-kairi/team-B1-recsys.mlflow"  # or MLFLOW_TRACKING_URI env var
+  experiment: "recommender"                                    # or MLFLOW_EXPERIMENT_NAME env var
+
 app:
   service_url: "http://127.0.0.1:8000"  # API service address (can be overridden with SERVICE_URL env var)
 ```
@@ -152,6 +157,9 @@ pytest tests/api
 
 # Run only Model baseline tests
 pytest tests/models
+
+# Run only Experiment tracking tests (no network: they use a temporary local MLflow store)
+pytest tests/tracking
 ```
 
 ---
@@ -209,3 +217,122 @@ git push
 git checkout <commit> -- data/raw/ml-1m.dvc
 dvc checkout
 ```
+
+---
+
+## Experiment Tracking with MLflow (Epic 3 / US 3.2)
+
+Every training is recorded in the team's **shared MLflow server on DagsHub**, so any run can be found, understood and repeated later. Everybody uses the same server and experiment, defined in `params.yaml` → `tracking`.
+
+| | |
+|---|---|
+| MLflow server | [`https://dagshub.com/e26-kairi/team-B1-recsys.mlflow`](https://dagshub.com/e26-kairi/team-B1-recsys.mlflow) |
+| Experiment | `recommender` |
+| Access | Your own DagsHub user and token (the same ones as for DVC) |
+| Code | `src/tracking/` (`ui.py`, `runs.py`, `versions.py`, `check_run.py`) |
+
+### 1. Set Up (Once)
+
+1. Install MLflow: `pip install -r src/tracking/requirements.txt`
+2. Credentials: **nothing extra to do** if you already saved your DagsHub user and token for DVC (Data Management → step 2). They are read from `.dvc/config.local`.
+   To use other credentials, set them as environment variables instead (they win over the DVC ones):
+   ```bash
+   # macOS/Linux
+   export MLFLOW_TRACKING_USERNAME=<your-dagshub-username>
+   export MLFLOW_TRACKING_PASSWORD=<your-dagshub-token>
+   # Windows PowerShell
+   $env:MLFLOW_TRACKING_USERNAME="<your-dagshub-username>"
+   $env:MLFLOW_TRACKING_PASSWORD="<your-dagshub-token>"
+   ```
+   *Never write the token in `params.yaml` or in the code.*
+
+### 2. Open the Experiment Tool (One Command)
+
+```bash
+python -m src.tracking.ui               # checks your access and opens MLflow in the browser
+python -m src.tracking.ui --no-browser  # only checks access and prints the address
+```
+
+To check that logging works end to end, log a small run of the popularity baseline (tagged `purpose=tracking-check`; descriptive numbers only, the evaluation scores come from the US 2.2 training):
+
+```bash
+python -m src.tracking.check_run        # prints the run id and its address
+```
+
+| Message | Fix |
+|---|---|
+| `The server rejected your credentials` | Wrong user or token: repeat Data Management → step 2, or fix the environment variables. |
+| `You don't have access to the team's DagsHub repository` | Ask `e26-kairi` to add you as a collaborator and accept the invitation. |
+| `Can't reach ...` | Check your internet connection. |
+| `No DagsHub credentials found` | Do step 1.2 above. |
+
+### 3. Log a Training (Model Code)
+
+Training code calls `log_training()` once per training:
+
+```python
+from src.tracking.runs import log_training, set_seed
+
+set_seed(42)                                   # fixes the Python and NumPy random generators
+model = MyModel(**settings).fit(train_df)      # needs predict_batch(df) or predict(user_id, movie_id)
+run_id = log_training(
+    model,
+    model_name="svd",
+    params=settings,                           # nested dicts are fine: {"split": {"test_size": 0.2}}
+    seed=42,
+    metrics={"precision_at_10": p10, "ndcg_at_10": ndcg10},
+    example=test_df[["user_id", "movie_id"]],  # documents the model input in MLflow
+    data_paths=["data/raw/ml-1m/ratings.dat"], # data read by the training (default: all DVC data)
+)
+```
+
+What every run stores, under its own unique **run id**:
+
+| Recorded | Where in MLflow |
+|---|---|
+| Settings and **random seed** | *Parameters* (`seed`, plus every setting passed in `params`) |
+| Scores | *Metrics* |
+| Trained model | *Logged models*; its exact address is in the tag `model_uri` (`models:/m-...`) |
+| **Code version** | Tags `code.git_commit`, `code.commit_url`, `code.git_branch`; the commit is also shown in the runs table (*Version*) |
+| Uncommitted code changes | Tag `code.git_dirty` (`true` means the commit alone can't repeat the run) |
+| **Data version** | Tag `data.version.<path>` = DVC hash of each dataset used (e.g. `data.version.data/raw/ml-1m`) |
+| Local data different from DVC | Tag `data.modified_locally` |
+
+**Before a training you want to keep:** commit your code and run `dvc pull`. Otherwise the run is still logged, with a `WARNING` and `code.git_dirty=true` or `data.modified_locally=true`.
+
+### 4. Find, Compare and Reproduce Runs
+
+**Find a run by its id**
+* In the browser: `https://dagshub.com/e26-kairi/team-B1-recsys.mlflow/#/experiments/0/runs/<run-id>`
+* In Python:
+  ```python
+  from src.tracking.config import configure
+  import mlflow
+  configure()                                    # same server and credentials as above
+  run = mlflow.get_run("<run-id>")
+  print(run.data.params, run.data.metrics, run.data.tags["code.git_commit"])
+  ```
+
+**Compare runs** (e.g. baseline vs SVD)
+1. Open the experiment (`python -m src.tracking.ui`).
+2. Filter the table if needed, e.g. `tags.model_name = 'svd'` or `params.seed = '42'`.
+3. Tick the runs → **Compare**: parameters and metrics side by side, plus charts.
+
+**Load the model of a run**
+```python
+import pandas as pd
+from src.tracking.runs import load_run_model
+model = load_run_model("<run-id>")
+model.predict(pd.DataFrame({"user_id": [1, 1], "movie_id": [1193, 661]}))   # one score per row
+```
+*Models are saved with cloudpickle, so loading one runs its code: only load models from the team's server.*
+
+**Repeat a run**
+1. Open the run and note `code.git_commit`, `data.version.*`, the parameters and the `seed`.
+2. Get that code and its data:
+   ```bash
+   git checkout <code.git_commit>
+   dvc checkout        # or dvc pull: restores the data versioned in that commit
+   ```
+3. Check that `data/raw/ml-1m.dvc` (or the dataset's `.dvc` / `dvc.lock`) shows the same hash as the run's `data.version.*` tag.
+4. Train again with the same parameters and seed: the new run is logged next to the old one, ready to compare.

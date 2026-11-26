@@ -20,3 +20,17 @@ app:
   # Address of the recommendation service (POST /recommend).
   # Can be overridden with the SERVICE_URL environment variable.
   service_url: "http://127.0.0.1:8000"
+
+models:
+  # Split settings for training and fair evaluation (US2.2 AC4 & AC6)
+  split:
+    test_size: 0.2
+    random_state: 42
+    stratified_by_user: true
+    min_user_ratings: 5
+
+  # Baseline reference models configuration (US2.2 AC1 & AC6)
+  baselines:
+    popularity:
+      min_ratings: 50
+

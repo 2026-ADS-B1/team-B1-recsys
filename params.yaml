@@ -34,3 +34,11 @@ models:
     popularity:
       min_ratings: 50
 
+  # Advanced Matrix Factorization / SVD model configuration (US2.2 AC2 & AC6)
+  svd:
+    n_factors: 20
+    learning_rate: 0.005
+    reg: 0.02
+    epochs: 15
+    random_state: 42
+

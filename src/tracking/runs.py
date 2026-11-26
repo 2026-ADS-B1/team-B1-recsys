@@ -36,6 +36,7 @@ import pandas as pd
 from src.tracking.config import TrackingSettings, configure, load_settings
 
 MODEL_ARTIFACT = "model"
+MODEL_URI_TAG = "model_uri"
 SEED_PARAM = "seed"
 INPUT_COLUMNS = ["user_id", "movie_id"]
 
@@ -102,7 +103,8 @@ def _signature():
     return ModelSignature(inputs=inputs, outputs=outputs)
 
 
-def _log_model(python_model: Any, example: pd.DataFrame | None) -> None:
+def _log_model(python_model: Any, example: pd.DataFrame | None) -> str:
+    """Save the model in the current run and return its address (model URI)."""
     import mlflow.pyfunc
 
     kwargs: dict[str, Any] = {
@@ -117,7 +119,7 @@ def _log_model(python_model: Any, example: pd.DataFrame | None) -> None:
         kwargs["name"] = MODEL_ARTIFACT
     else:
         kwargs["artifact_path"] = MODEL_ARTIFACT
-    mlflow.pyfunc.log_model(**kwargs)
+    return mlflow.pyfunc.log_model(**kwargs).model_uri
 
 
 def log_training(
@@ -148,8 +150,20 @@ def log_training(
         mlflow.set_tags({"model_name": model_name, **(tags or {})})
         mlflow.log_params(all_params)
         mlflow.log_metrics({k: float(v) for k, v in metrics.items()})
-        _log_model(_pyfunc_class()(model), example)
+        model_uri = _log_model(_pyfunc_class()(model), example)
+        # Where the model is, e.g. models:/m-... (MLflow 3). Use it to load or register it.
+        mlflow.set_tag(MODEL_URI_TAG, model_uri)
         return run.info.run_id
+
+
+def run_model_uri(run_id: str) -> str:
+    """Address of the model saved by a run (tag set by log_training)."""
+    import mlflow
+
+    tags = mlflow.get_run(run_id).data.tags
+    # runs:/<id>/model is the classic address; on DagsHub with MLflow 3 only the
+    # models:/<model id> address stored in the tag can be downloaded.
+    return tags.get(MODEL_URI_TAG) or f"runs:/{run_id}/{MODEL_ARTIFACT}"
 
 
 def load_run_model(run_id: str, settings: TrackingSettings | None = None):
@@ -157,4 +171,4 @@ def load_run_model(run_id: str, settings: TrackingSettings | None = None):
     import mlflow.pyfunc
 
     configure(settings or load_settings())
-    return mlflow.pyfunc.load_model(f"runs:/{run_id}/{MODEL_ARTIFACT}")
+    return mlflow.pyfunc.load_model(run_model_uri(run_id))

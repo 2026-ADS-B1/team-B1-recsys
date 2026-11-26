@@ -74,6 +74,13 @@ def test_settings_seed_and_scores_are_saved_under_the_id(local_store):
     assert experiment.name == "test-exp"
 
 
+def test_the_run_records_where_its_model_is(local_store):
+    run_id = train(local_store)
+    uri = mlflow.get_run(run_id).data.tags[runs.MODEL_URI_TAG]
+    assert uri.startswith(("models:/", "runs:/"))
+    assert runs.run_model_uri(run_id) == uri
+
+
 def test_the_trained_model_can_be_loaded_with_the_id(local_store):
     run_id = train(local_store)
     model = runs.load_run_model(run_id, settings=local_store)

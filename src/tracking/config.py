@@ -97,6 +97,23 @@ def resolve_credentials(
     return None
 
 
+def safe_console() -> None:
+    """Don't crash on Windows consoles that can't print some characters.
+
+    MLflow prints an emoji when a run ends; a cp1252 console would raise
+    UnicodeEncodeError. Unprintable characters are replaced instead.
+    """
+    import sys
+
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(errors="replace")
+            except (ValueError, OSError):
+                pass
+
+
 def configure(
     settings: TrackingSettings | None = None,
     dvc_config: str | Path = DEFAULT_DVC_LOCAL_CONFIG,
@@ -107,6 +124,7 @@ def configure(
     """
     import mlflow
 
+    safe_console()
     settings = settings or load_settings()
     if settings.is_remote:
         creds = resolve_credentials(dvc_config)

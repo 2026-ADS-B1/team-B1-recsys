@@ -16,7 +16,8 @@ One call per training:
 
 The run gets a unique id (MLflow's run id). Everything is stored under it:
 parameters (including the seed), metrics and the trained model, so the run can be
-found and its model loaded later with that id (see load_run_model).
+found and its model loaded later with that id (see load_run_model). The version of
+the code (Git commit) and of the data (DVC hash) are saved as tags (US3.2, task 3).
 
 The model is saved as an MLflow "pyfunc" model: it receives a DataFrame with the
 columns user_id and movie_id and returns one score per row. Any model object works
@@ -27,13 +28,15 @@ from __future__ import annotations
 
 import inspect
 import random
-from collections.abc import Mapping
+import sys
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
 from src.tracking.config import TrackingSettings, configure, load_settings
+from src.tracking.versions import version_tags, warnings_for
 
 MODEL_ARTIFACT = "model"
 MODEL_URI_TAG = "model_uri"
@@ -131,12 +134,18 @@ def log_training(
     metrics: Mapping[str, float],
     example: pd.DataFrame | None = None,
     tags: Mapping[str, str] | None = None,
+    data_paths: Iterable[str] | None = None,
     settings: TrackingSettings | None = None,
+    repo_root: str = ".",
 ) -> str:
     """Save one training (params + seed, metrics, model) as a new run. Returns its id.
 
     `example`: a few (user_id, movie_id) rows, e.g. from the test set; they document
-    the model input in MLflow. `settings`: only for tests (defaults to params.yaml).
+    the model input in MLflow. `data_paths`: the data files/folders the training read
+    (e.g. ["data/processed/ratings_clean.parquet"]); their DVC version is saved with
+    the run. If omitted, the version of every DVC-versioned dataset is saved.
+    The Git commit of the code is always saved (see src/tracking/versions.py).
+    `settings` / `repo_root`: only for tests.
     """
     import mlflow
 
@@ -145,9 +154,12 @@ def log_training(
 
     all_params = flatten_params(params)
     all_params[SEED_PARAM] = str(int(seed))
+    versions = version_tags(data_paths, repo_root=repo_root)
+    for message in warnings_for(versions):
+        print(f"WARNING: {message}", file=sys.stderr)
 
     with mlflow.start_run(run_name=model_name) as run:
-        mlflow.set_tags({"model_name": model_name, **(tags or {})})
+        mlflow.set_tags({**versions, "model_name": model_name, **(tags or {})})
         mlflow.log_params(all_params)
         mlflow.log_metrics({k: float(v) for k, v in metrics.items()})
         model_uri = _log_model(_pyfunc_class()(model), example)

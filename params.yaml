@@ -1,33 +1,36 @@
-# Settings shared by the project. Change them here, not in the code.
-
 serving:
-  # Minimum number of ratings a movie needs to be recommended.
-  # Avoids that a movie with a single 5-star rating tops the list (see US1.1).
   min_ratings: 50
-
-  # Moods a user can choose in POST /recommend, and the genres linked to each one.
-  # A movie matches a mood if it has at least one of its genres.
-  # Genre names must be written exactly as in MovieLens (see GET /genres).
   moods:
-    relaxed: [Comedy, Animation, Children's, Musical]
-    adventurous: [Action, Adventure, Sci-Fi, Fantasy, Western]
-    romantic: [Romance]
-    thrilling: [Thriller, Crime, Mystery, Film-Noir]
-    scary: [Horror]
-    thoughtful: [Drama, Documentary, War]
-
+    relaxed:
+    - Comedy
+    - Animation
+    - Children's
+    - Musical
+    adventurous:
+    - Action
+    - Adventure
+    - Sci-Fi
+    - Fantasy
+    - Western
+    romantic:
+    - Romance
+    thrilling:
+    - Thriller
+    - Crime
+    - Mystery
+    - Film-Noir
+    scary:
+    - Horror
+    thoughtful:
+    - Drama
+    - Documentary
+    - War
 app:
-  # Address of the recommendation service (POST /recommend).
-  # Can be overridden with the SERVICE_URL environment variable.
-  service_url: "http://127.0.0.1:8000"
-
+  service_url: http://127.0.0.1:8000
 tracking:
-  # Shared MLflow server of the team on DagsHub (US3.2). Every training is logged here.
-  uri: "https://dagshub.com/e26-kairi/team-B1-recsys.mlflow"
-  experiment: "recommender"
-
+  uri: https://dagshub.com/e26-kairi/team-B1-recsys.mlflow
+  experiment: recommender
 models:
-  # Split settings for training and fair evaluation (US2.2 AC4 & AC6)
   split:
     val_size: 0.1
     test_size: 0.1
@@ -35,24 +38,40 @@ models:
     stratified_by_user: true
     min_user_ratings: 5
     temporal: true
-
-  # Evaluation settings for ranking and rating benchmarks (US2.2 AC4 & AC5)
   evaluation:
     k: 10
     threshold: 4.0
-
-  # Baseline reference models configuration (US2.2 AC1 & AC6)
   baselines:
     popularity:
       min_ratings: 50
-
-  # Advanced Matrix Factorization / SVD model configuration (US2.2 AC2 & AC6)
   svd:
     n_factors: 20
-    learning_rate: 0.005
-    reg: 0.02
+    learning_rate: 0.008
+    reg: 0.05
     epochs: 40
     random_state: 42
     early_stopping: true
     patience: 5
-
+tuning:
+  svd:
+    epochs: 35
+    patience: 4
+    trials:
+    - n_factors: 10
+      learning_rate: 0.002
+      reg: 0.01
+    - n_factors: 10
+      learning_rate: 0.005
+      reg: 0.02
+    - n_factors: 20
+      learning_rate: 0.005
+      reg: 0.02
+    - n_factors: 20
+      learning_rate: 0.008
+      reg: 0.05
+    - n_factors: 30
+      learning_rate: 0.005
+      reg: 0.02
+    - n_factors: 30
+      learning_rate: 0.008
+      reg: 0.05

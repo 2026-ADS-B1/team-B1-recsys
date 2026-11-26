@@ -1,0 +1,88 @@
+{
+  "best_trial_id": 4,
+  "best_params": {
+    "n_factors": 20,
+    "learning_rate": 0.008,
+    "reg": 0.05,
+    "epochs": 35,
+    "patience": 4,
+    "early_stopping": true,
+    "random_state": 42
+  },
+  "best_val_metrics": {
+    "rmse": 0.9469,
+    "mae": 0.7523,
+    "precision_at_10": 0.0235,
+    "recall_at_10": 0.0317,
+    "ndcg_at_10": 0.0306
+  },
+  "final_test_metrics": {
+    "rmse": 0.9937,
+    "mae": 0.7875,
+    "precision_at_10": 0.027,
+    "recall_at_10": 0.0329,
+    "ndcg_at_10": 0.0346
+  },
+  "ranking_of_trials": [
+    {
+      "trial_id": 4,
+      "n_factors": 20,
+      "learning_rate": 0.008,
+      "reg": 0.05,
+      "best_epoch": 15,
+      "val_rmse": 0.9469,
+      "val_mae": 0.7523,
+      "mlflow_run_id": "f8dcc1392f7e4d5fb70006ef635aa85c"
+    },
+    {
+      "trial_id": 3,
+      "n_factors": 20,
+      "learning_rate": 0.005,
+      "reg": 0.02,
+      "best_epoch": 22,
+      "val_rmse": 0.9477,
+      "val_mae": 0.753,
+      "mlflow_run_id": "49a23c4b331844bd95cb32058663aab7"
+    },
+    {
+      "trial_id": 2,
+      "n_factors": 10,
+      "learning_rate": 0.005,
+      "reg": 0.02,
+      "best_epoch": 23,
+      "val_rmse": 0.9505,
+      "val_mae": 0.7544,
+      "mlflow_run_id": "c5412e2db2a54e69a20d61714a4cc605"
+    },
+    {
+      "trial_id": 6,
+      "n_factors": 30,
+      "learning_rate": 0.008,
+      "reg": 0.05,
+      "best_epoch": 12,
+      "val_rmse": 0.9509,
+      "val_mae": 0.7556,
+      "mlflow_run_id": "52de9df2970a4a66b6006763d459d492"
+    },
+    {
+      "trial_id": 1,
+      "n_factors": 10,
+      "learning_rate": 0.002,
+      "reg": 0.01,
+      "best_epoch": 35,
+      "val_rmse": 0.9519,
+      "val_mae": 0.7547,
+      "mlflow_run_id": "f7ed9b0287f44db9a8dec2a29ccf6b81"
+    },
+    {
+      "trial_id": 5,
+      "n_factors": 30,
+      "learning_rate": 0.005,
+      "reg": 0.02,
+      "best_epoch": 15,
+      "val_rmse": 0.9538,
+      "val_mae": 0.757,
+      "mlflow_run_id": "ec3e9bd43115426ca2c80f43db20d0bf"
+    }
+  ]
+}

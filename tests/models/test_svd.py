@@ -2,6 +2,7 @@
 import pytest
 import numpy as np
 import pandas as pd
+import yaml
 
 from src.models.svd import MatrixFactorizationSVDModel
 
@@ -23,13 +24,16 @@ def sample_ratings_df():
 
 def test_svd_init_and_config():
     """AC6: Test initialization and configuration loading from params.yaml."""
+    with open("params.yaml", "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)["models"]["svd"]
     model = MatrixFactorizationSVDModel.from_config("params.yaml")
-    assert model.n_factors == 20
-    assert model.learning_rate == pytest.approx(0.005)
-    assert model.reg == pytest.approx(0.02)
-    assert model.epochs == 40
-    assert model.patience == 5
-    assert model.random_state == 42
+    assert model.n_factors == cfg["n_factors"]
+    assert model.learning_rate == pytest.approx(cfg["learning_rate"])
+    assert model.reg == pytest.approx(cfg["reg"])
+    assert model.epochs == cfg["epochs"]
+    assert model.patience == cfg["patience"]
+    assert model.random_state == cfg["random_state"]
+
 
 
 def test_svd_fit_learning_convergence(sample_ratings_df):

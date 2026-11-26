@@ -218,8 +218,17 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-/data/
+
+# Data lives in DVC (DagsHub), never in Git. Only DVC pointer files are committed.
+/data/**
+!/data/**/
+!/data/**/*.dvc
+!/data/**/.gitignore
 __pycache__/
 .pytest_cache/
 .venv/
 .DS_Store
+
+# MLflow local runs (the team logs to the shared DagsHub server)
+mlruns/
+mlartifacts/

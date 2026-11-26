@@ -1,6 +1,6 @@
 """Simple reference baseline models for recommender systems benchmark.
 
-Fulfills US 2.2 Acceptance Criteria:
+Fulfills the US 2.2 Acceptance Criteria:
 - AC1: Simple reference models exist. Given cleaned training data, basic models produce
        recommendations used as a benchmark starting point.
 - AC4: Evaluated using standard prediction and ranking interfaces.

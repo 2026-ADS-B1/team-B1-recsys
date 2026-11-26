@@ -95,7 +95,28 @@ dvc pull
 ```
 *(Alternatively, extract MovieLens 1M directly into `data/raw/ml-1m/` with `movies.dat` and `ratings.dat`).*
 
-### 3. Start the Backend API (Terminal 1)
+### 3. Validate and Clean Data (US 1.3)
+
+Before training models, execute data quality checks and apply the EDA threshold ($k \ge 10$) to filter out infrequent users and movies:
+
+```bash
+# Run validation and cleaning (reads data.min_ratings from params.yaml)
+python -m src.data.cleaning
+
+# Run cleaning and automatically track clean data with DVC:
+python -m src.data.cleaning --dvc
+
+# Or run only the basic validation checks:
+python -m src.data.validation
+```
+
+* **Quality Checks (AC1 & AC2):** Verifies no missing values, ratings strictly within [0.5, 5.0], no repeated ratings, and referential integrity (no orphan IDs). Halts pipeline immediately with a detailed error message if bad data is found.
+* **EDA Filtering (AC3):** Removes movies and users with fewer ratings than `data.min_ratings` (set to 10 in `params.yaml`, separate from `serving.min_ratings`).
+* **Clean Data Storage:** Processed tables saved to `data/processed/ratings.csv` and `data/processed/movies.csv`.
+* **DVC Tracking:** Processed files are versioned via DVC (`data/processed.dvc`).
+* **Execution Report (AC4):** Short report saved to `data/processed/cleaning_report.json` logging problems found by each check and ratings removed.
+
+### 4. Start the Backend API (Terminal 1)
 
 ```bash
 uvicorn api.main:app --reload
@@ -104,7 +125,7 @@ uvicorn api.main:app --reload
 * Interactive API documentation: `http://127.0.0.1:8000/docs`
 * Health check: `http://127.0.0.1:8000/health`
 
-### 4. Start the Web Application (Terminal 2)
+### 5. Start the Web Application (Terminal 2)
 
 In a separate terminal:
 
@@ -117,11 +138,18 @@ streamlit run app/main.py
 
 ## Configuration (`params.yaml`)
 
-Application and serving settings are defined in `params.yaml` at the root of the repository so they can be modified without altering source code:
+Application, serving, and data settings are defined in `params.yaml` at the root of the repository so they can be modified without altering source code:
 
 ```yaml
+data:
+  min_ratings: 10   # Minimum ratings per user and per movie for data cleaning / training (EDA recommendation)
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  report_path: "data/processed/cleaning_report.json"
+
 serving:
   min_ratings: 50   # Minimum ratings a movie needs to be recommended
+
 
   moods:            # Mood definitions mapping to MovieLens genres
     relaxed: [Comedy, Animation, Children's, Musical]

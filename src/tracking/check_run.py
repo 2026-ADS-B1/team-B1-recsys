@@ -101,6 +101,7 @@ def main(argv: list[str] | None = None) -> int:
             },
             example=ratings[["user_id", "movie_id"]].head(5),
             tags={"purpose": "tracking-check"},
+            data_paths=[args.ratings],
             settings=settings,
         )
     except TrackingError as exc:

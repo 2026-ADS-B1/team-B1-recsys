@@ -227,6 +227,7 @@ __marimo__/
 __pycache__/
 .pytest_cache/
 .venv/
+.DS_Store
 
 # MLflow local runs (the team logs to the shared DagsHub server)
 mlruns/

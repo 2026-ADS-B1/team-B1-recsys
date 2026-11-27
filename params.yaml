@@ -1,5 +1,16 @@
 # Settings shared by the project. Change them here, not in the code.
 
+data:
+  # Minimum number of ratings a user and a movie need for data cleaning / training.
+  # Threshold recommended by the EDA (k >= 10, see US1.1).
+  # Kept separate from serving.min_ratings.
+  min_ratings: 10
+
+  # Paths for data pipeline execution
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  report_path: "data/processed/cleaning_report.json"
+
 serving:
   # Minimum number of ratings a movie needs to be recommended.
   # Avoids that a movie with a single 5-star rating tops the list (see US1.1).
